@@ -1,0 +1,16 @@
+[project]
+name = "krita-stroke-sampler"
+version = "0.1.0"
+description = "Sample color from a source layer at each stroke"
+authors = [
+    { name = "Francesca Massarenti", email = "frammenti@murena.io" }
+]
+license = "GPL-3.0"
+readme = "README.md"
+requires-python = ">=3.14"
+
+[tool.pyright]
+include = ["plugin/stroke_sampler"]
+ignore = ["typings"]
+stubPath = "typings"
+reportMissingModuleSource = "none"

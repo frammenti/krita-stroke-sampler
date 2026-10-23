@@ -1,0 +1,8 @@
+MODULE_ID = "stroke_sampler"
+WINDOW_NAME = "Stroke Sampler"
+
+MIN_RADIUS = 0.01
+MAX_RADIUS = 10000.0
+DEFAULT_RADIUS = 1.0
+
+DEFAULT_ACTIVE = False

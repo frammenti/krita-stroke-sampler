@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Service
+ServiceTypes=Krita/PythonPlugin
+X-KDE-Library=stroke_sampler
+X-Python-2-Compatible=false
+Name=Stroke Sampler
+Comment=Sample color from a source layer at each stroke
