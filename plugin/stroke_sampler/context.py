@@ -2,12 +2,12 @@ from krita import Krita
 
 
 def instance() -> Krita:
-    _app = Krita.instance()
+    instance = Krita.instance()
 
-    if _app is None:
+    if instance is None:
         raise RuntimeError("Krita instance not found")
 
-    return _app
+    return instance
 
 
 app: Krita = instance()

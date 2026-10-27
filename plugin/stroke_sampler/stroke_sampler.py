@@ -1,4 +1,6 @@
-from krita import Krita, DockWidgetFactory, DockWidgetFactoryBase
+"""Register one Stroke Sampler docker per Krita window."""
+
+from krita import DockWidgetFactory, DockWidgetFactoryBase
 
 from .docker import StrokeSamplerDocker
 from .context import app

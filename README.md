@@ -1,51 +1,115 @@
-# Krita Stroke Sampler Plugin
+# Krita Stroke Sampler
 
-Sample color from a source layer at each stroke
+[![Python: 3.14](https://img.shields.io/badge/python-3.14-007ec6.svg?logo=python&logoColor=white)](https://www.python.org)
+[![Krita: 6.0.1](https://img.shields.io/badge/krita-6.0.1-fe4b9c?logo=krita&logoColor=white)](https://krita.org)
+[![License: GPLv3](https://img.shields.io/badge/license-GPLv3-67ac09.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![GitHub Release](https://img.shields.io/github/v/release/frammenti/krita-stroke-sampler?color=67ac09)](https://github.com/frammenti/krita-stroke-sampler/releases/latest)
 
-Enable the plugin in Krita's Python Plugin Manager, restart Krita, then open
-**Settings → Dockers → Stroke Sampler**.
+A plugin for the Krita painting program that lets you sample color from another layer with every brushstroke.
 
-The docker provides an enable checkbox, a source-layer selector (including
-layers inside groups), and a sampling radius, defaulting to **1 px**.
-Disabling sampling retains the selected source. Radius is measured in image
-pixels, independent of zoom; Krita's brush size uses pixels for its diameter.
-The radius can be set from 0.01 to 10,000 px.
+## Installation
 
-Settings apply globally and are saved automatically in Krita's configuration
-after user changes. Changing sampler settings does not modify the document.
-Enable and radius can also be changed with no document open.
+1. Download [`krita-stroke-sampler.zip`](https://github.com/frammenti/krita-stroke-sampler/releases/latest/download/krita-stroke-sampler.zip) from the [latest release](https://github.com/frammenti/krita-stroke-sampler/releases/latest).
+2. In Krita:
+   1. Choose **Tools → Scripts → Import Python Plugin from File…** and select the zip file.
+   2. When prompted, accept to enable the plugin.
 
-Within a document, the selected source is kept as a node reference, so renaming
-or reordering it preserves the selection. The source's name is persisted for
-the next session and used to find a matching layer when switching documents.
-With duplicate names, automatic selection uses Krita's first matching node.
-If no matching source exists, the selection is cleared; the next settings save
-overwrites the persisted name. Deleting the selected source also clears and
-saves the selection.
+   _or_
 
-Currently this plugin implements the settings docker and persistence only;
-stroke interception and color sampling are not implemented yet.
+   Manually:
+   1. Find the `pykrita/` directory inside Krita's resources folder. You can open it in Krita through **Settings → Manage Resources → Open Resource Folder**.
+   2. Copy the contents of the zip file into the directory:
 
-To publish a release, commit the plugin and the release workflow, push the
-commit, then create and push a version tag:
+   ```
+   pykrita
+   ├── stroke_sampler
+   └── stroke_sampler.desktop
+   ```
+
+   3. Restart Krita.
+   4. Enable **Stroke Sampler** in the Python Plugin Manager under **Settings → Configure Krita**.
+
+3. Restart Krita.
+4. Open **Settings → Dockers → Stroke Sampler**.
+
+## Settings
+
+**Enable:** toggle on/off sampling without affecting the source selection.
+
+**Source layer:** select a layer in the current document (masks excluded) from which to sample color, ignoring visibility and opacity.
+Choose **None** to clear the source and stop sampling.
+The selection is synced if the layer is renamed or nested, and cleared if deleted.
+
+> [!TIP]
+> If you name the source layer the same across documents, for example, “Reference,” that layer will be selected automatically when you switch between them.
+
+**Size:** set the diameter of color sampling in image pixels, independent of zoom, much like brush size.
+If the size is greater than 1px, the resulting color will be the average of the colors of the pixels within the diameter.
+
+Settings are global preferences saved in Krita's `kritarc` configuration after user changes.
+
+## Roadmap
+
+- [ ] Sample color from the source layer with every stroke
+- [ ] Option to sync sample size with brush size
+- [ ] Keyboard shortcut for setting a coordinate offset for the source color, like a Clone Stamp tool
+- [ ] Keyboard shortcut for color preview
+
+## Development
+
+Runtime files live in `plugin/`.
+
+The remaining directories and scripts support development:
+
+- `tests/`: automated checks using real Qt controls and Krita API doubles.
+- `typings/`: local Krita Python API type stubs used by Pyright.
+- `update_types.sh`: import type stubs into `typings/krita.pyi` from an installed Krita application.
+- `package_plugin.sh`: create a local plugin `.zip` package to import into Krita.
+- `install_plugin.sh`: install the plugin manually and restart Krita.
+
+## Testing
+
+With Python 3.14+ and PyQt6 available, run the tests from the repository root:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests -v
 ```
 
-The GitHub Actions workflow creates a release with generated notes and attaches
-`krita-stroke-sampler-v0.1.0.zip`. Tags such as `v0.1.0-beta.1` create
-prereleases. The tag determines the release version; keep `pyproject.toml`'s
-version consistent when preparing a release.
+Tests cover:
 
-The installable files live in `plugin/`. The workflow ZIPs its contents, so
-`stroke_sampler.desktop` and the `stroke_sampler/` directory sit at the archive
-root. A copy of `LICENSE` lives in `plugin/stroke_sampler/`. It excludes the repository README,
-tests, typings, development scripts, project configuration, and Python caches.
-A future manual placed inside `plugin/stroke_sampler/` will be included automatically.
-Users should download this ZIP from the release assets and import it through
-**Tools → Scripts → Import Python Plugin…**.
+- plugin registration,
+- settings parsing and persistence,
+- startup signal blocking,
+- layer lookup,
+- document switching,
+- live node updates and deletion,
+- flat-list selection,
+- popup list synchronization.
 
-Re-running the workflow replaces the ZIP on an existing release while retaining
-its release notes. No additional GitHub token secret needs to be configured.
+No running Krita instance is required.
+Qt's offscreen backend may print platform capability messages during popup tests.
+
+Krita's custom slider rendering and native window integration still require testing in the application.
+
+## Packaging and releases
+
+To publish a release, commit and push the changes, then create and push a
+version tag:
+
+```bash
+git tag -a v0.1.0 -m "Initial release"
+git push origin --tags
+```
+
+The Github actions workflow creates a release and uploads the packaged plugin as `krita-stroke-sampler.zip`.
+For annotated tags, the tag message becomes the release body and can contain Markdown.
+Omit `-m` to compose a longer message in your editor. Lightweight tags have no
+message, so their releases use automatically generated notes instead.
+The archive contains `stroke_sampler.desktop` and the `stroke_sampler/` folder, including a copy of the license.
+Tags such as `v0.1.0-beta.1` create prereleases.
+Remember to keep the version in `pyproject.toml` consistent with the tag.
+Re-running the workflow replaces the asset on an existing mutable release.
+
+## License
+
+This plugin is licensed under the GNU General Public License v3.0, see [LICENSE](LICENSE).

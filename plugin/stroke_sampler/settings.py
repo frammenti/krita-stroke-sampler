@@ -1,50 +1,24 @@
 """Application wide settings, persisted in the kritarc file."""
 
 from dataclasses import dataclass
-import math
 from typing import Any, TypeVar, Optional, Callable, overload
 
 from krita import Document, Node
 
 from .context import app
-from .constants import MODULE_ID, DEFAULT_RADIUS, DEFAULT_ACTIVE, MIN_RADIUS, MAX_RADIUS
+from .layer import get_layer
+from .constants import MODULE_ID, DEFAULT_SIZE, DEFAULT_ACTIVE, MIN_SIZE, MAX_SIZE
 
 
 @dataclass
 class SamplerSettings:
     active: bool = DEFAULT_ACTIVE
     source_layer: Optional[Node] = None
-    radius: float = DEFAULT_RADIUS
+    size: int = DEFAULT_SIZE
 
 
-def get_layer(name: str) -> Optional[Node]:
-    document = app.activeDocument()
-
-    if document is None:
-        return None
-
-    layer = Document.nodeByName(document, name)
-
-    # A Krita Node can be either a layer or a mask.
-    # The sampler accepts layers, not masks.
-    # Possible values are:
-    # - paintlayer,
-    # - grouplayer,
-    # - filelayer,
-    # - filterlayer,
-    # - filllayer,
-    # - clonelayer,
-    # - vectorlayer,
-    # - transparencymask,
-    # - filtermask,
-    # - transformmask,
-    # - selectionmask,
-    # - colorizemask.
-    # Reference: https://api.kde.org/legacy/krita/html/classNode.html#a58f4025f31c1bb44df0eb6df7b559e70
-    if layer and not layer.type().endswith("layer"):
-        return None
-
-    return layer
+def str_or_none(value: Any) -> Optional[str]:
+    return str(value) if value is not None else None
 
 
 def parse_bool(value: str) -> bool:
@@ -56,11 +30,11 @@ def parse_bool(value: str) -> bool:
     raise ValueError("Invalid boolean setting")
 
 
-def parse_radius(value: str) -> float:
-    radius = float(value)
-    if not math.isfinite(radius) or not MIN_RADIUS <= radius <= MAX_RADIUS:
-        raise ValueError("Sampling radius is outside the supported range")
-    return radius
+def parse_size(value: str) -> int:
+    size = int(value)
+    if not MIN_SIZE <= size <= MAX_SIZE:
+        raise ValueError("Sampling size is outside the supported range")
+    return size
 
 
 T = TypeVar("T")
@@ -77,9 +51,7 @@ def read_setting(name: str, cast: Callable[[str], T]) -> Optional[T]: ...
 def read_setting(
     name: str, cast: Callable[[str], T], default: Optional[T] = None
 ) -> Optional[T]:
-    value_str = app.readSetting(
-        MODULE_ID, name, str(default) if default is not None else None
-    )
+    value_str = app.readSetting(MODULE_ID, name, str_or_none(default))
     if not value_str:
         return default
     try:
@@ -89,20 +61,23 @@ def read_setting(
 
 
 def write_setting(name: str, value: Any) -> None:
-    app.writeSetting(MODULE_ID, name, str(value) if value is not None else None)
+    app.writeSetting(MODULE_ID, name, str_or_none(value))
 
 
 def load_settings() -> SamplerSettings:
     """Load once; keep and mutate the returned object for the session."""
     active = read_setting("active", parse_bool, DEFAULT_ACTIVE)
-    source_layer = read_setting("source_layer_name", get_layer)
-    radius = read_setting("radius", parse_radius, DEFAULT_RADIUS)
+    # Documents are not available when Krita creates the docker at startup.
+    source_layer = None
+    size = read_setting("size", parse_size, DEFAULT_SIZE)
 
-    return SamplerSettings(active, source_layer, radius)
+    return SamplerSettings(active, source_layer, size)
 
 
-def update_settings(settings: SamplerSettings) -> None:
-    """Rebind the source on document changes; leave other settings untouched."""
+def update_settings(
+    settings: SamplerSettings, document: Optional[Document] = None
+) -> None:
+    """Rebind the source layer on document changes."""
     source_name: Optional[str] = None
 
     # Prefer the live name
@@ -117,7 +92,7 @@ def update_settings(settings: SamplerSettings) -> None:
     if source_name is None:
         source_name = read_setting("source_layer_name", str)
 
-    settings.source_layer = get_layer(source_name) if source_name else None
+    settings.source_layer = get_layer(source_name, document) if source_name else None
 
 
 def save_settings(settings: SamplerSettings) -> None:
@@ -126,4 +101,4 @@ def save_settings(settings: SamplerSettings) -> None:
 
     write_setting("active", settings.active)
     write_setting("source_layer_name", source_name)
-    write_setting("radius", settings.radius)
+    write_setting("size", settings.size)

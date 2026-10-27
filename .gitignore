@@ -6,3 +6,6 @@ __pycache__/
 
 # PyPI configuration file
 .pypirc
+
+# Plugin package
+*.zip
