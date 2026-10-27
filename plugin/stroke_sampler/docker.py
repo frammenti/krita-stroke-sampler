@@ -6,7 +6,7 @@ from krita import Canvas, DockWidget, Document, SliderSpinBox, Node
 from PyQt6.QtCore import QSignalBlocker, QTimer
 from PyQt6.QtWidgets import QCheckBox, QComboBox, QFrame, QSpinBox, QFormLayout, QWidget
 
-from .settings import load_settings, save_settings, update_settings
+from .state import settings
 from .layer import is_layer
 from .constants import (
     WINDOW_NAME,
@@ -24,17 +24,16 @@ from .constants import (
 class ActiveWidget(QCheckBox):
     def __init__(self, parent: StrokeSamplerDocker):
         super().__init__(ACTIVE_LABEL, parent._widget)
-        self._settings = parent._settings
         self.toggled.connect(self._on_input)
 
     def _on_input(self, value: bool) -> None:
-        self._settings.active = value
-        save_settings(self._settings)
+        settings.active = value
+        settings.save()
 
     def update_value(self) -> None:
         # Programmatic refreshes must not persist settings during startup
         with QSignalBlocker(self):
-            self.setChecked(self._settings.active)
+            self.setChecked(settings.active)
 
 
 class SizeWidget(SliderSpinBox):
@@ -50,25 +49,24 @@ class SizeWidget(SliderSpinBox):
         self._widget.setSuffix(" px")
         self._widget.setKeyboardTracking(False)
         self._widget.setToolTip(SIZE_DESCRIPTION)
+        self._widget.setFixedHeight(32)
 
-        self._settings = parent._settings
         self._widget.valueChanged.connect(self._on_input)
 
     def _on_input(self, value: int) -> None:
-        self._settings.size = value
-        save_settings(self._settings)
+        settings.size = value
+        settings.save()
 
     def update_value(self) -> None:
         # valueChanged belongs to the embedded spin box, not Krita's wrapper
         with QSignalBlocker(self._widget):
             if not self._widget.hasFocus():
-                self.setValue(self._settings.size)
+                self.setValue(settings.size)
 
 
 class SourceLayerWidget(QComboBox):
     def __init__(self, parent: StrokeSamplerDocker):
         super().__init__(parent._widget)
-        self._settings = parent._settings
         self._document = parent._document
         self.setToolTip(SOURCE_LAYER_DESCRIPTION)
         self.currentIndexChanged.connect(self._on_input)
@@ -102,17 +100,17 @@ class SourceLayerWidget(QComboBox):
         if index > 0:
             # The list stores comparable IDs, the node is resolved on selection
             layer_id = self.itemData(index)
-            self._settings.source_layer = self._document.nodeByUniqueID(layer_id)
+            settings.source_layer = self._document.nodeByUniqueID(layer_id)
         else:
-            self._settings.source_layer = None
+            settings.source_layer = None
 
-        save_settings(self._settings)
+        settings.save()
 
     def _update_selected_layer_name(self) -> None:
         if self._document is None or not self.isVisible():
             return
 
-        current = self._settings.source_layer
+        current = settings.source_layer
 
         if current is None:
             return
@@ -127,8 +125,8 @@ class SourceLayerWidget(QComboBox):
         # Layer (or its group) was deleted
         if current_depth == -1:
             # Clear selection even with signal blocked by `showPopup()`
-            self._settings.source_layer = None
-            save_settings(self._settings)
+            settings.source_layer = None
+            settings.save()
             with QSignalBlocker(self):
                 self.setCurrentIndex(0)
             return
@@ -138,7 +136,7 @@ class SourceLayerWidget(QComboBox):
         # Layer was renamed or nested
         if self.currentText() != current_label:
             self.setItemText(self.currentIndex(), current_label)
-            save_settings(self._settings)
+            settings.save()
 
     def _append_layers(self, parent: Node, depth: int = 0) -> None:
         # childNodes returns bottom-to-top order
@@ -161,7 +159,7 @@ class SourceLayerWidget(QComboBox):
             if root:
                 self._append_layers(root)
 
-            current = self._settings.source_layer
+            current = settings.source_layer
             current_index = self.findData(current.uniqueId()) if current else 0
             self.setCurrentIndex(max(current_index, 0))
 
@@ -180,14 +178,11 @@ class SourceLayerWidget(QComboBox):
 class DockerLayout(QFormLayout):
     def __init__(self, parent: QWidget):
         super().__init__(parent)
-        # Krita resets the widget margins to 1, 1, 1, 1 after creation,
-        # so we set them on the docker.
+        # Krita resets the widget margins to (1, 1, 1, 1) after creation,
+        # so we set them on the docker
         parent.setContentsMargins(3, 9, 3, 9)  # left, top, right, bottom
         self.setContentsMargins(1, 1, 1, 1)
-        self.setVerticalSpacing(12)
-
-        left, top, right, bottom = self.getContentsMargins()
-        print("Left:", left, "Top:", top, "Right:", right, "Bottom:", bottom)
+        self.setVerticalSpacing(8)
 
         self._separator = QFrame(parent)
         self._separator.setFrameShape(QFrame.Shape.HLine)
@@ -208,7 +203,6 @@ class StrokeSamplerDocker(DockWidget):
         self.setWidget(self._widget)
 
         self._document: Optional[Document] = None
-        self._settings = load_settings()
 
         self.active = ActiveWidget(self)
         layout.addRow(self.active)
@@ -240,5 +234,5 @@ class StrokeSamplerDocker(DockWidget):
 
         if document != self._document:
             self._update_document(document)
-            update_settings(self._settings, self._document)
+            settings.update(self._document)
             self.source_layer.update_value()

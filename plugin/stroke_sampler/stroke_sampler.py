@@ -3,7 +3,7 @@
 from krita import DockWidgetFactory, DockWidgetFactoryBase
 
 from .docker import StrokeSamplerDocker
-from .context import app
+from .state import app
 from .constants import MODULE_ID
 
 app.addDockWidgetFactory(

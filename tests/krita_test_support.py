@@ -122,6 +122,9 @@ class Application:
         self.values = {}
         self.writes = []
 
+    def activeDocument(self):
+        return None
+
     def readSetting(self, group, name, default):
         return self.values.get(name, default) or ""
 
@@ -155,12 +158,12 @@ app = Application()
 package = ModuleType(PACKAGE)
 package.__path__ = [str(ROOT / "plugin" / "stroke_sampler")]
 sys.modules[PACKAGE] = package
-context = ModuleType(f"{PACKAGE}.context")
-context.app = app
 krita = ModuleType("krita")
+krita.Krita = SimpleNamespace(instance=lambda: app)
 krita.Document, krita.Node, krita.Canvas = Document, Node, Canvas
 krita.DockWidget, krita.SliderSpinBox = QDockWidget, SliderSpinBox
-with patch.dict(sys.modules, {"krita": krita, context.__name__: context}):
+with patch.dict(sys.modules, {"krita": krita}):
     settings = importlib.import_module(f"{PACKAGE}.settings")
     layer = importlib.import_module(f"{PACKAGE}.layer")
+    state = importlib.import_module(f"{PACKAGE}.state")
     docker = importlib.import_module(f"{PACKAGE}.docker")

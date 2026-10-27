@@ -7,7 +7,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QListView
 
-from krita_test_support import Canvas, Document, Node, app, docker
+from krita_test_support import Canvas, Document, Node, app, docker, state
 
 
 class DockerTests(unittest.TestCase):
@@ -19,6 +19,7 @@ class DockerTests(unittest.TestCase):
         app.values.clear()
         app.values.update(active="False", size="25", source_layer_name="Source")
         app.writes.clear()
+        state.settings.load()
         self.dock = docker.StrokeSamplerDocker()
         self.dock.resize(450, 200)
         self.dock.show()
@@ -54,6 +55,27 @@ class DockerTests(unittest.TestCase):
             )
         self.qt.processEvents()
 
+    def test_dockers_share_settings_without_reloading_preferences(self):
+        self.dock.active.setChecked(True)
+        self.dock.sample_size._widget.setValue(37)
+        with patch.object(state.settings, "load") as load:
+            other = docker.StrokeSamplerDocker()
+        try:
+            load.assert_not_called()
+            self.assertTrue(other.active.isChecked())
+            self.assertEqual(other.sample_size._widget.value(), 37)
+            other.active.setChecked(False)
+            other.sample_size._widget.setValue(42)
+            self.assertFalse(state.settings.active)
+            self.assertEqual(state.settings.size, 42)
+            self.dock.active.update_value()
+            self.dock.sample_size.update_value()
+            self.assertFalse(self.dock.active.isChecked())
+            self.assertEqual(self.dock.sample_size._widget.value(), 42)
+        finally:
+            other.source_layer._timer.stop()
+            other.deleteLater()
+
     def test_startup_refresh_does_not_erase_persisted_source(self):
         self.assertFalse(app.writes)
         self.assertEqual(app.values["source_layer_name"], "Source")
@@ -80,9 +102,9 @@ class DockerTests(unittest.TestCase):
     def test_rebuild_restores_selection_across_distinct_live_wrappers(self):
         source = Node("Source")
         self.activate(Document([source]))
-        self.assertIsNot(self.dock._settings.source_layer, source)
+        self.assertIsNot(state.settings.source_layer, source)
         source.label = "Renamed"
-        self.assertEqual(self.dock._settings.source_layer.name(), "Renamed")
+        self.assertEqual(state.settings.source_layer.name(), "Renamed")
         self.combo.update_value()
         self.assertEqual(self.combo.currentData(), source.id)
         self.assertFalse(app.writes)
@@ -94,7 +116,7 @@ class DockerTests(unittest.TestCase):
         )
         self.activate(doc)
         self.choose(second)
-        self.assertEqual(self.dock._settings.source_layer, second)
+        self.assertEqual(state.settings.source_layer, second)
         self.assertEqual(self.combo.currentData(), second.id)
         self.assertEqual(doc.id_lookups, [second.id])
         self.assertEqual(len(app.writes), 3)
@@ -104,7 +126,7 @@ class DockerTests(unittest.TestCase):
         source = Node("Colors")
         self.activate(Document([Node("Group", [source], "grouplayer")]))
         self.choose(source, keyboard=True)
-        self.assertEqual(self.dock._settings.source_layer, source)
+        self.assertEqual(state.settings.source_layer, source)
         app.writes.clear()
         self.combo.showPopup()
         QTest.keyClick(self.combo.view(), Qt.Key.Key_Escape)
@@ -132,14 +154,14 @@ class DockerTests(unittest.TestCase):
         group.add_child(source)
         self.combo._update_selected_layer_name()
         self.assertEqual(self.combo.currentText(), "    Source")
-        self.assertEqual(self.dock._settings.source_layer, source)
+        self.assertEqual(state.settings.source_layer, source)
 
     def test_selected_layer_deletion_clears_and_saves(self):
         source = Node("Source")
         self.activate(Document([source]))
         source.detach()
         self.combo._update_selected_layer_name()
-        self.assertIsNone(self.dock._settings.source_layer)
+        self.assertIsNone(state.settings.source_layer)
         self.assertIsNone(self.combo.currentData())
         self.assertEqual(app.values["source_layer_name"], "")
 
@@ -150,7 +172,7 @@ class DockerTests(unittest.TestCase):
         self.combo.update_value()
         self.assertEqual(self.combo.currentIndex(), 0)
         self.combo._update_selected_layer_name()
-        self.assertIsNone(self.dock._settings.source_layer)
+        self.assertIsNone(state.settings.source_layer)
         self.assertEqual(app.values["source_layer_name"], "")
 
     def test_deleting_enclosing_group_detects_detached_descendant(self):
@@ -160,7 +182,7 @@ class DockerTests(unittest.TestCase):
         group.detach()
         self.assertIsNotNone(source.parentNode())
         self.combo._update_selected_layer_name()
-        self.assertIsNone(self.dock._settings.source_layer)
+        self.assertIsNone(state.settings.source_layer)
         self.assertIsNone(self.combo.currentData())
         self.assertEqual(app.values["source_layer_name"], "")
 
@@ -178,7 +200,7 @@ class DockerTests(unittest.TestCase):
         self.activate(Document([source]))
         source.detach()
         self.combo.showPopup()
-        self.assertIsNone(self.dock._settings.source_layer)
+        self.assertIsNone(state.settings.source_layer)
         self.assertEqual(self.combo.count(), 1)
         self.assertEqual(app.values["source_layer_name"], "")
 
@@ -200,21 +222,21 @@ class DockerTests(unittest.TestCase):
         source = Node("Source")
         self.activate(Document([source]))
         self.combo.setCurrentIndex(0)
-        self.assertIsNone(self.dock._settings.source_layer)
+        self.assertIsNone(state.settings.source_layer)
         self.assertEqual(app.values["source_layer_name"], "")
 
     def test_document_switch_rebinds_name_and_preserves_other_settings(self):
         first, second = Node("Source"), Node("Source")
         self.activate(Document([first]))
         self.activate(Document([Node("Group", [second], "grouplayer")]))
-        self.assertEqual(self.dock._settings.source_layer, second)
+        self.assertEqual(state.settings.source_layer, second)
         self.assertEqual(self.combo.currentData(), second.id)
         self.assertEqual(self.combo.currentText(), "    Source")
-        self.assertEqual(self.dock._settings.size, 25)
+        self.assertEqual(state.settings.size, 25)
         self.assertFalse(app.writes)
         self.activate(None)
         self.assertFalse(self.combo.isEnabled())
-        self.assertIsNone(self.dock._settings.source_layer)
+        self.assertIsNone(state.settings.source_layer)
         self.assertFalse(app.writes)
 
     def test_same_document_canvas_switch_does_not_rebuild(self):
@@ -226,7 +248,7 @@ class DockerTests(unittest.TestCase):
 
     def test_no_match_overwrites_persisted_name_on_next_save(self):
         self.activate(Document())
-        self.assertIsNone(self.dock._settings.source_layer)
+        self.assertIsNone(state.settings.source_layer)
         self.dock.sample_size._widget.setValue(40)
         self.assertEqual(app.values["source_layer_name"], "")
 
@@ -236,7 +258,7 @@ class DockerTests(unittest.TestCase):
         self.dock.active.setChecked(True)
         self.dock.sample_size._widget.setValue(40)
         self.dock.active.setChecked(False)
-        self.assertEqual(self.dock._settings.source_layer, source)
+        self.assertEqual(state.settings.source_layer, source)
         self.assertEqual(app.values["active"], "False")
         self.assertEqual(app.values["size"], "40")
         self.assertEqual(app.values["source_layer_name"], "Source")

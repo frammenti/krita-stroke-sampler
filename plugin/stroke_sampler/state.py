@@ -1,4 +1,8 @@
+"""Shared application and sampler settings for the plugin session."""
+
 from krita import Krita
+
+from .settings import SamplerSettings
 
 
 def instance() -> Krita:
@@ -11,3 +15,6 @@ def instance() -> Krita:
 
 
 app: Krita = instance()
+
+settings = SamplerSettings(app)
+settings.load(app.activeDocument())

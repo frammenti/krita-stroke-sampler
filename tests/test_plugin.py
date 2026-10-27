@@ -1,4 +1,4 @@
-"""Krita context validation and docker registration."""
+"""Krita state validation and docker registration."""
 
 import importlib.util
 import sys
@@ -6,7 +6,7 @@ from types import ModuleType, SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from krita_test_support import PACKAGE, ROOT, app, context, docker
+from krita_test_support import PACKAGE, ROOT, app, state, docker, settings, Document, Node
 
 
 class PluginTests(unittest.TestCase):
@@ -16,19 +16,31 @@ class PluginTests(unittest.TestCase):
         spec.loader.exec_module(module)
         return module
 
-    def test_context_uses_krita_instance(self):
+    def test_state_uses_krita_instance(self):
         krita = ModuleType("krita")
         krita.Krita = SimpleNamespace(instance=lambda: app)
-        with patch.dict(sys.modules, {"krita": krita}):
-            context = self.load("_context_test", ROOT / "plugin/stroke_sampler/context.py")
-        self.assertIs(context.app, app)
+        with patch.dict(sys.modules, {"krita": krita, f"{PACKAGE}.settings": settings}):
+            state = self.load(f"{PACKAGE}._state_test", ROOT / "plugin/stroke_sampler/state.py")
+        self.assertIs(state.app, app)
+        self.assertIs(state.settings._app, app)
 
-    def test_context_fails_clearly_outside_krita(self):
+    def test_state_loads_source_from_active_document(self):
+        source = Node("Source")
+        document = Document([source])
+        krita = ModuleType("krita")
+        krita.Krita = SimpleNamespace(instance=lambda: app)
+        with (patch.dict(sys.modules, {"krita": krita, f"{PACKAGE}.settings": settings}),
+              patch.dict(app.values, {"source_layer_name": "Source"}, clear=True),
+              patch.object(app, "activeDocument", return_value=document)):
+            loaded = self.load(f"{PACKAGE}._state_test", ROOT / "plugin/stroke_sampler/state.py")
+        self.assertEqual(loaded.settings.source_layer, source)
+
+    def test_state_fails_clearly_outside_krita(self):
         krita = ModuleType("krita")
         krita.Krita = SimpleNamespace(instance=lambda: None)
-        with patch.dict(sys.modules, {"krita": krita}):
+        with patch.dict(sys.modules, {"krita": krita, f"{PACKAGE}.settings": settings}):
             with self.assertRaisesRegex(RuntimeError, "Krita instance not found"):
-                self.load("_context_test", ROOT / "plugin/stroke_sampler/context.py")
+                self.load(f"{PACKAGE}._state_test", ROOT / "plugin/stroke_sampler/state.py")
 
     def test_registers_factory_for_docker(self):
         factory = Mock(return_value=object())
@@ -36,7 +48,7 @@ class PluginTests(unittest.TestCase):
         krita.DockWidgetFactory = factory
         krita.DockWidgetFactoryBase = SimpleNamespace(DockPosition=SimpleNamespace(DockRight="right"))
         register = Mock()
-        modules = {"krita": krita, f"{PACKAGE}.docker": docker, f"{PACKAGE}.context": context}
+        modules = {"krita": krita, f"{PACKAGE}.docker": docker, f"{PACKAGE}.state": state}
         with patch.dict(sys.modules, modules), patch.object(app, "addDockWidgetFactory", register, create=True):
             self.load(f"{PACKAGE}.stroke_sampler", ROOT / "plugin/stroke_sampler/stroke_sampler.py")
         factory.assert_called_once_with("stroke_sampler", "right", docker.StrokeSamplerDocker)
