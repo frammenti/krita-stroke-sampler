@@ -10,14 +10,14 @@ class SettingsTests(unittest.TestCase):
     def setUp(self):
         app.values.clear()
         app.writes.clear()
-        self.settings = settings.SamplerSettings(app)
+        self.settings = settings.SamplerSettings()
 
     def load(self, document=None):
         self.settings.load(document)
         return self.settings
 
     def test_defaults_load_without_writes_or_document(self):
-        self.assertEqual(self.load(), settings.SamplerSettings(app))
+        self.assertEqual(self.load(), settings.SamplerSettings())
         self.assertFalse(app.writes)
 
     def test_load_parses_preferences_but_defers_layer_resolution(self):
@@ -50,21 +50,21 @@ class SettingsTests(unittest.TestCase):
         for text, expected in (("true", True), ("1", True), (" TRUE ", True),
                                ("false", False), ("0", False), (" False ", False)):
             with self.subTest(text=text):
-                self.assertIs(self.settings._parse_bool(text), expected)
+                self.assertIs(settings.parse_bool(text), expected)
         with self.assertRaises(ValueError):
-            self.settings._parse_bool("maybe")
+            settings.parse_bool("maybe")
 
     def test_size_parser_checks_integer_bounds_without_float_overflow(self):
         for value in (1, 50, 1000):
-            self.assertEqual(self.settings._parse_size(str(value)), value)
+            self.assertEqual(settings.parse_size(str(value)), value)
         for text in ("0", "-1", "1001", "1.5", "nan", "inf", "invalid", "9" * 400):
             with self.subTest(text=text):
                 with self.assertRaises(ValueError):
-                    self.settings._parse_size(text)
+                    settings.parse_size(text)
 
     def test_invalid_persisted_values_use_defaults(self):
         app.values.update(active="maybe", size="nan")
-        self.assertEqual(self.load(), settings.SamplerSettings(app))
+        self.assertEqual(self.load(), settings.SamplerSettings())
         self.assertFalse(app.writes)
 
     def test_missing_value_casts_default_or_returns_none_without_cast(self):
@@ -90,7 +90,7 @@ class SettingsTests(unittest.TestCase):
 
     def test_update_uses_live_renamed_source_and_keeps_other_preferences(self):
         source, replacement = Node("Source"), Node("Renamed")
-        state = settings.SamplerSettings(app, True, source.wrapper(), 40)
+        state = settings.SamplerSettings(True, source.wrapper(), 40)
         source.label = "Renamed"
         app.values["source_layer_name"] = "Old persisted name"
         state.update(Document([replacement]))
@@ -103,13 +103,13 @@ class SettingsTests(unittest.TestCase):
         source = Node("Source")
         broken = Mock()
         broken.name.side_effect = RuntimeError("wrapped object was deleted")
-        state = settings.SamplerSettings(app, source_layer=broken)
+        state = settings.SamplerSettings(source_layer=broken)
         app.values["source_layer_name"] = "Source"
         state.update(Document([source]))
         self.assertEqual(state.source_layer, source)
 
     def test_no_match_or_no_document_clears_reference_without_writing(self):
-        state = settings.SamplerSettings(app, source_layer=Node("Missing"))
+        state = settings.SamplerSettings(source_layer=Node("Missing"))
         state.update(Document())
         self.assertIsNone(state.source_layer)
         app.values["source_layer_name"] = "Missing"
@@ -119,7 +119,7 @@ class SettingsTests(unittest.TestCase):
 
     def test_mutable_state_saves_live_name_and_none(self):
         source = Node("Source")
-        state = settings.SamplerSettings(app, source_layer=source.wrapper())
+        state = settings.SamplerSettings(source_layer=source.wrapper())
         state.active, state.size = True, 50
         source.label = "Renamed"
         state.save()

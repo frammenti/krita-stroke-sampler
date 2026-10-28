@@ -106,8 +106,9 @@ class Document:
         return self._find(lambda node: node.id == uid)
 
 
-class Canvas:
+class Canvas(QObject):
     def __init__(self, document):
+        super().__init__()
         self.doc = document
 
     def view(self):
@@ -117,8 +118,9 @@ class Canvas:
         return self.doc
 
 
-class Application:
+class Application(QObject):
     def __init__(self):
+        super().__init__()
         self.values = {}
         self.writes = []
 
@@ -161,9 +163,11 @@ sys.modules[PACKAGE] = package
 krita = ModuleType("krita")
 krita.Krita = SimpleNamespace(instance=lambda: app)
 krita.Document, krita.Node, krita.Canvas = Document, Node, Canvas
+krita.View, krita.Window, krita.Extension = Canvas, QObject, QObject
 krita.DockWidget, krita.SliderSpinBox = QDockWidget, SliderSpinBox
 with patch.dict(sys.modules, {"krita": krita}):
     settings = importlib.import_module(f"{PACKAGE}.settings")
     layer = importlib.import_module(f"{PACKAGE}.layer")
     state = importlib.import_module(f"{PACKAGE}.state")
     docker = importlib.import_module(f"{PACKAGE}.docker")
+    extension = importlib.import_module(f"{PACKAGE}.extension")

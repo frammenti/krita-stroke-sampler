@@ -1,50 +1,51 @@
-"""Application wide settings, persisted in the kritarc file."""
+"""Per-window settings with shared defaults persisted in the kritarc file."""
 
-from dataclasses import dataclass, field
-from typing import Any, TypeVar, Optional, Callable, overload
+from dataclasses import dataclass
+from typing import Any, Optional, Callable, overload
 
-from krita import Krita, Document, Node
+from krita import Document, Node
 
 from .layer import get_layer
+from .state import app
 from .constants import MODULE_ID, DEFAULT_SIZE, DEFAULT_ACTIVE, MIN_SIZE, MAX_SIZE
 
-T = TypeVar("T")
+
+def str_or_none(value: Any) -> Optional[str]:
+    return str(value) if value is not None else None
+
+
+def parse_bool(value: str) -> bool:
+    normalized = value.strip().lower()
+    if normalized in ("true", "1"):
+        return True
+    if normalized in ("false", "0"):
+        return False
+    raise ValueError("Invalid boolean setting")
+
+
+def parse_size(value: str) -> int:
+    size = int(value)
+    if not MIN_SIZE <= size <= MAX_SIZE:
+        raise ValueError("Sampling size is outside the supported range")
+    return size
 
 
 @dataclass
 class SamplerSettings:
-    _app: Krita = field(repr=False, compare=False)
     active: bool = DEFAULT_ACTIVE
     source_layer: Optional[Node] = None
     size: int = DEFAULT_SIZE
 
-    def _str_or_none(self, value: Any) -> Optional[str]:
-        return str(value) if value is not None else None
-
-    def _parse_bool(self, value: str) -> bool:
-        normalized = value.strip().lower()
-        if normalized in ("true", "1"):
-            return True
-        if normalized in ("false", "0"):
-            return False
-        raise ValueError("Invalid boolean setting")
-
-    def _parse_size(self, value: str) -> int:
-        size = int(value)
-        if not MIN_SIZE <= size <= MAX_SIZE:
-            raise ValueError("Sampling size is outside the supported range")
-        return size
+    @overload
+    def read[T](self, name: str, cast: Callable[[str], T], default: T) -> T: ...
 
     @overload
-    def read(self, name: str, cast: Callable[[str], T], default: T) -> T: ...
+    def read[T](self, name: str, cast: Callable[[str], T]) -> Optional[T]: ...
 
-    @overload
-    def read(self, name: str, cast: Callable[[str], T]) -> Optional[T]: ...
-
-    def read(
+    def read[T](
         self, name: str, cast: Callable[[str], T], default: Optional[T] = None
     ) -> Optional[T]:
-        value_str = self._app.readSetting(MODULE_ID, name, self._str_or_none(default))
+        value_str = app.readSetting(MODULE_ID, name, str_or_none(default))
         if not value_str:
             return default
         try:
@@ -53,12 +54,12 @@ class SamplerSettings:
             return default
 
     def write(self, name: str, value: Any) -> None:
-        self._app.writeSetting(MODULE_ID, name, self._str_or_none(value))
+        app.writeSetting(MODULE_ID, name, str_or_none(value))
 
     def load(self, document: Optional[Document] = None) -> None:
         """Reload preferences in place."""
-        self.active = self.read("active", self._parse_bool, DEFAULT_ACTIVE)
-        self.size = self.read("size", self._parse_size, DEFAULT_SIZE)
+        self.active = self.read("active", parse_bool, DEFAULT_ACTIVE)
+        self.size = self.read("size", parse_size, DEFAULT_SIZE)
 
         if document is not None:
             self.update(document)

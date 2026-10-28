@@ -46,9 +46,12 @@ The selection is synced if the layer is renamed or nested, and cleared if delete
 **Size:** set the diameter of color sampling in image pixels, independent of zoom, much like brush size.
 If the size is greater than 1px, the resulting color will be the average of the colors of the pixels within the diameter.
 
-Settings are global preferences saved in Krita's `kritarc` configuration after user changes.
+Each window has its own live settings, shared by its docker and input handler.
+User changes are saved to Krita's `kritarc` and loaded by new windows.
 
 ## Roadmap
+
+The current input prototype swaps foreground and background colors on left-button canvas presses while enabled and the Freehand Brush tool is selected. Source-layer color sampling is not implemented yet.
 
 - [ ] Sample color from the source layer with every stroke
 - [ ] Option to sync sample size with brush size
@@ -58,6 +61,18 @@ Settings are global preferences saved in Krita's `kritarc` configuration after u
 ## Development
 
 Runtime files live in `plugin/`.
+
+The plugin registers both a **docker** and an **extension**. For each Krita window, the
+extension finds the docker and creates an **input handler**, sharing the settings
+object owned by that docker. The docker forwards `canvasChanged` callbacks to
+keep the handler's canvas and view current.
+
+The handler finds **canvas receivers** among the window's descendant widgets by their
+class name, `KisOpenGLCanvas2`, and installs an **event listener** directly on them.
+It reinstalls the listener after canvas focus changes to preserve priority over
+Krita's input filters. The listener forwards the receiving widget and local press
+position; the handler checks whether sampling is enabled and the Freehand Brush
+tool is selected before acting.
 
 The remaining directories and scripts support development:
 
@@ -77,7 +92,9 @@ QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests -v
 
 Tests cover:
 
-- plugin registration,
+- plugin registration and one handler per window,
+- initial canvas attachment and listener priority after refocusing,
+- receiver/position delivery and brush selection tracking,
 - settings parsing and persistence,
 - startup signal blocking,
 - layer lookup,
