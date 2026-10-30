@@ -10,6 +10,13 @@ import sys
 from types import ModuleType, SimpleNamespace
 from unittest.mock import patch
 
+# Load optional NumPy before patch.dict restores sys.modules, so lazy submodule
+# imports do not reload it after the Krita doubles have been installed.
+try:
+    import numpy
+except ImportError:
+    pass
+
 from PyQt6.QtCore import QObject, QUuid
 from PyQt6.QtWidgets import QDockWidget, QSpinBox
 
@@ -164,6 +171,7 @@ krita = ModuleType("krita")
 krita.Krita = SimpleNamespace(instance=lambda: app)
 krita.Document, krita.Node, krita.Canvas = Document, Node, Canvas
 krita.View, krita.Window, krita.Extension = Canvas, QObject, QObject
+krita.ManagedColor = QObject
 krita.DockWidget, krita.SliderSpinBox = QDockWidget, SliderSpinBox
 with patch.dict(sys.modules, {"krita": krita}):
     settings = importlib.import_module(f"{PACKAGE}.settings")
@@ -171,3 +179,4 @@ with patch.dict(sys.modules, {"krita": krita}):
     state = importlib.import_module(f"{PACKAGE}.state")
     docker = importlib.import_module(f"{PACKAGE}.docker")
     extension = importlib.import_module(f"{PACKAGE}.extension")
+    sampling = importlib.import_module(f"{PACKAGE}.color")

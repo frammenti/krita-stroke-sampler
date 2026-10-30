@@ -5,7 +5,7 @@
 [![License: GPLv3](https://img.shields.io/badge/license-GPLv3-67ac09.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![GitHub Release](https://img.shields.io/github/v/release/frammenti/krita-stroke-sampler?color=67ac09)](https://github.com/frammenti/krita-stroke-sampler/releases/latest)
 
-A plugin for the Krita painting program that lets you sample color from another layer with every brushstroke.
+A plugin for the Krita painting program that lets you sample color from any layer with every brushstroke.
 
 ## Installation
 
@@ -43,17 +43,16 @@ The selection is synced if the layer is renamed or nested, and cleared if delete
 > [!TIP]
 > If you name the source layer the same across documents, for example, “Reference,” that layer will be selected automatically when you switch between them.
 
-**Size:** set the diameter of color sampling in image pixels, independent of zoom, much like brush size.
-If the size is greater than 1px, the resulting color will be the average of the colors of the pixels within the diameter.
+**Size:** set the diameter of color sampling in image pixels, independent of zoom. Sizes above 1 average the colors inside a circle centered at stroke start. Fully transparent pixels are ignored and the sampled color is always opaque. Averaging uses the source color space and profile without additional linear-light conversion. Even diameters center the circle between pixels; odd diameters center it on the selected pixel.
 
-Each window has its own live settings, shared by its docker and input handler.
-User changes are saved to Krita's `kritarc` and loaded by new windows.
+When NumPy is available in Krita’s Python environment, circular masking and averaging use vectorized array operations. Otherwise, the plugin uses a Python fallback with the same result (but far worse performance).
+
+Settings are independent per window and saved in `kritarc` as defaults for new windows.
 
 ## Roadmap
 
-The current input prototype swaps foreground and background colors on left-button canvas presses while enabled and the Freehand Brush tool is selected. Source-layer color sampling is not implemented yet.
-
-- [ ] Sample color from the source layer with every stroke
+- [x] Sample one pixel from the source layer with every stroke
+- [x] Average colors within the sampling diameter
 - [ ] Option to sync sample size with brush size
 - [ ] Keyboard shortcut for setting a coordinate offset for the source color, like a Clone Stamp tool
 - [ ] Keyboard shortcut for color preview
@@ -62,17 +61,13 @@ The current input prototype swaps foreground and background colors on left-butto
 
 Runtime files live in `plugin/`.
 
-The plugin registers both a **docker** and an **extension**. For each Krita window, the
-extension finds the docker and creates an **input handler**, sharing the settings
-object owned by that docker. The docker forwards `canvasChanged` callbacks to
-keep the handler's canvas and view current.
+The plugin registers both a **docker** and an **extension**.
+For each Krita window, the extension creates an **input handler** and shares with it the settings selected in the docker.
+The docker forwards `canvasChanged` callbacks to keep the handler's view current.
 
-The handler finds **canvas receivers** among the window's descendant widgets by their
-class name, `KisOpenGLCanvas2`, and installs an **event listener** directly on them.
-It reinstalls the listener after canvas focus changes to preserve priority over
-Krita's input filters. The listener forwards the receiving widget and local press
-position; the handler checks whether sampling is enabled and the Freehand Brush
-tool is selected before acting.
+The handler listens for left-button presses on `KisOpenGLCanvas2` and reinstalls its filter after focus changes to run before Krita's input filter.
+
+If the Freehand Brush tool is selected and sampling is enabled, the handler maps the stroke start point into image coordinates, samples the color from the source layer's projection, and sets it as foreground color before the stroke starts.
 
 The remaining directories and scripts support development:
 
@@ -90,23 +85,12 @@ With Python 3.14+ and PyQt6 available, run the tests from the repository root:
 QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests -v
 ```
 
-Tests cover:
-
-- plugin registration and one handler per window,
-- initial canvas attachment and listener priority after refocusing,
-- receiver/position delivery and brush selection tracking,
-- settings parsing and persistence,
-- startup signal blocking,
-- layer lookup,
-- document switching,
-- live node updates and deletion,
-- flat-list selection,
-- popup list synchronization.
+Tests cover window and canvas lifecycle, settings and layer selection, input coordinate mapping, color decoding and averaging, and the NumPy/fallback circular mask.
 
 No running Krita instance is required.
-Qt's offscreen backend may print platform capability messages during popup tests.
-
-Krita's custom slider rendering and native window integration still require testing in the application.
+Tests use real Qt controls and Krita API doubles: rendering, ICC conversion, and native input behavior still need in-app testing.
+Install NumPy to include the vectorization checks, otherwise those checks are skipped.
+Qt's offscreen backend may print platform messages during tests.
 
 ## Packaging and releases
 
@@ -114,15 +98,13 @@ To publish a release, commit and push the changes, then create and push a
 version tag:
 
 ```bash
-git tag -a v0.1.0 -m "Initial release"
+git tag v0.1.0
 git push origin --tags
 ```
 
-The Github actions workflow creates a release and uploads the packaged plugin as `krita-stroke-sampler.zip`.
-For annotated tags, the tag message becomes the release body and can contain Markdown.
-Omit `-m` to compose a longer message in your editor. Lightweight tags have no
-message, so their releases use automatically generated notes instead.
+The GitHub Actions workflow creates a release and uploads the packaged plugin as `krita-stroke-sampler.zip`.
 The archive contains `stroke_sampler.desktop` and the `stroke_sampler/` folder, including a copy of the license.
+For annotated tags, the tag message becomes the release body and can contain Markdown.
 Tags such as `v0.1.0-beta.1` create prereleases.
 Remember to keep the version in `pyproject.toml` consistent with the tag.
 Re-running the workflow replaces the asset on an existing mutable release.

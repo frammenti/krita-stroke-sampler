@@ -33,8 +33,8 @@ class StrokeSamplerExtension(Extension):
             return
 
         if docker.handler is None:
-            docker.handler = StrokeHandler(
-                main_window, docker.canvas(), docker.settings
-            )
+            view = canvas.view() if (canvas := docker.canvas()) is not None else None
+
+            docker.handler = StrokeHandler(main_window, view, docker.settings)
         else:
             warn("The docker handler was already initialized", RuntimeWarning)

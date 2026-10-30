@@ -37,7 +37,7 @@ class ExtensionTests(unittest.TestCase):
         with (patch.object(self.dock, "canvas", return_value=canvas, create=True),
               patch.object(extension, "StrokeHandler") as factory):
             self.extension.createActions(self.kwindow)
-            factory.assert_called_once_with(self.window, canvas, self.dock.settings)
+            factory.assert_called_once_with(self.window, canvas.view.return_value, self.dock.settings)
             self.assertIs(self.dock.handler, factory.return_value)
             with self.assertWarnsRegex(RuntimeWarning, "already initialized"):
                 self.extension.createActions(self.kwindow)
@@ -60,14 +60,13 @@ class ExtensionTests(unittest.TestCase):
         try:
             handler = docker.StrokeHandler(self.window, canvas, self.dock.settings)
             received = []
-            handler.stroke_listener.stroke_start.connect(lambda widget, point: received.append(widget))
+            handler.stroke_listener.stroke_start.connect(lambda point: received.append(point))
             for widget in (own, unrelated, other):
                 event = QMouseEvent(QEvent.Type.MouseButtonPress, QPointF(), QPointF(),
                                     Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton,
                                     Qt.KeyboardModifier.NoModifier)
                 QApplication.sendEvent(widget, event)
-            self.assertEqual(received, [own])
-            self.assertIs(handler.canvas, canvas)
-            self.assertIs(handler.view, canvas.view.return_value)
+            self.assertEqual(received, [QPointF()])
+            self.assertIs(handler.view, canvas)
         finally:
             sip.delete(other_window)

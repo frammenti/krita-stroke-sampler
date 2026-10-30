@@ -253,4 +253,4 @@ class StrokeSamplerDocker(DockWidget):
             self.source_layer.update_value()
 
         if self.handler:
-            self.handler.canvasChanged(canvas)
+            self.handler.viewChanged(view)

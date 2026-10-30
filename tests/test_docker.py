@@ -77,8 +77,8 @@ class DockerTests(unittest.TestCase):
         first, second = Canvas(document), Canvas(document)
         for canvas in (first, second, None):
             self.dock.canvasChanged(canvas)
-            self.dock.handler.canvasChanged.assert_called_with(canvas)
-        self.assertEqual(self.dock.handler.canvasChanged.call_count, 3)
+            self.dock.handler.viewChanged.assert_called_with(canvas.view() if canvas else None)
+        self.assertEqual(self.dock.handler.viewChanged.call_count, 3)
 
     def test_startup_refresh_does_not_erase_persisted_source(self):
         self.assertFalse(app.writes)
